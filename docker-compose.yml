@@ -1,0 +1,20 @@
+services:
+  fastmail:
+    build: .
+    ports:
+      - "5009:5009"
+    environment:
+      FASTMAIL_DB: /data/fastmail.sqlite
+      FASTMAIL_PORT: "5009"
+      MODEL_PROVIDER: ${MODEL_PROVIDER:-xai}
+      MODEL_NAME: ${MODEL_NAME:-grok-4-1-fast-reasoning}
+      XAI_API_KEY: ${XAI_API_KEY:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      GOOGLE_API_KEY: ${GOOGLE_API_KEY:-}
+      FASTMAIL_ADMIN_PASSWORD: ${FASTMAIL_ADMIN_PASSWORD:-FastMail2026$$}
+      FASTMAIL_SECRET: ${FASTMAIL_SECRET:-}
+    volumes:
+      - fastmail-data:/data
+volumes:
+  fastmail-data:
