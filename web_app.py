@@ -168,6 +168,80 @@ def get(session):
     return _guard(session, "contacts", views.contacts_view)
 
 
+# --- labels -----------------------------------------------------------------
+
+@rt("/labels")
+def get(session):
+    return _guard(session, "labels", views.labels_manage)
+
+
+@rt("/labels/new")
+def post(session, name: str = "", color: str = "gray"):
+    if not _user(session):
+        return RedirectResponse("/login", status_code=303)
+    db.create_label(name, color)
+    return RedirectResponse("/labels", status_code=303)
+
+
+@rt("/labels/{lid}/delete")
+def post(session, lid: int):
+    if not _user(session):
+        return RedirectResponse("/login", status_code=303)
+    db.delete_label(lid)
+    return RedirectResponse("/labels", status_code=303)
+
+
+@rt("/label/{lid}")
+def get(session, lid: int):
+    return _guard(session, f"label-{lid}", lambda: views.label_view(lid))
+
+
+@rt("/message/{mid}/label/add")
+def post(session, mid: int, label_id: str = ""):
+    if not _user(session):
+        return Response("Unauthorized", status_code=401)
+    if label_id:
+        db.add_label(mid, int(label_id))
+    return views.msg_labels(mid)
+
+
+@rt("/message/{mid}/label/{lid}/remove")
+def post(session, mid: int, lid: int):
+    if not _user(session):
+        return Response("Unauthorized", status_code=401)
+    db.remove_label(mid, lid)
+    return views.msg_labels(mid)
+
+
+# --- calendar ---------------------------------------------------------------
+
+@rt("/calendar")
+def get(session, year: int = 2026, month: int = 6, sel: str = ""):
+    if month < 1 or month > 12:
+        year, month = 2026, 6
+    return _guard(session, "calendar", lambda: views.calendar_view(year, month, sel))
+
+
+@rt("/calendar/new")
+def post(session, title: str = "", start_at: str = "", location: str = "", notes: str = ""):
+    if not _user(session):
+        return RedirectResponse("/login", status_code=303)
+    start = (start_at or "").replace("T", " ")[:16]
+    db.create_event(title, start, location=location, notes=notes)
+    day = start[:10]
+    return RedirectResponse(f"/calendar?sel={day}" if day else "/calendar", status_code=303)
+
+
+@rt("/calendar/{eid}/delete")
+def post(session, eid: int):
+    if not _user(session):
+        return RedirectResponse("/login", status_code=303)
+    ev = db.event(eid)
+    db.delete_event(eid)
+    day = ev["start_at"][:10] if ev else ""
+    return RedirectResponse(f"/calendar?sel={day}" if day else "/calendar", status_code=303)
+
+
 @rt("/ai/summarise/{tid}/{mid}")
 def post(session, tid: int, mid: int):
     if not _user(session):
@@ -259,6 +333,8 @@ def _ensure_db():
         logger.info("No database found — seeding synthetic mailbox…")
         import seed
         seed.build()
+    else:
+        db.init_schema()  # idempotent; creates labels / message_labels / events
 
 
 _ensure_db()

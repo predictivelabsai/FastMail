@@ -7,6 +7,7 @@ messages, threads, an address book, and AI summarise/draft.
 from __future__ import annotations
 
 import os
+import re
 import sqlite3
 from contextlib import contextmanager
 from pathlib import Path
@@ -88,9 +89,32 @@ CREATE TABLE IF NOT EXISTS chat_messages (
     content       TEXT NOT NULL,
     created       TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS labels (
+    id            INTEGER PRIMARY KEY,
+    name          TEXT NOT NULL UNIQUE,
+    color         TEXT NOT NULL DEFAULT 'gray'
+);
+CREATE TABLE IF NOT EXISTS message_labels (
+    message_id    INTEGER REFERENCES messages(id),
+    label_id      INTEGER REFERENCES labels(id),
+    PRIMARY KEY (message_id, label_id)
+);
+CREATE TABLE IF NOT EXISTS events (
+    id            INTEGER PRIMARY KEY,
+    title         TEXT NOT NULL,
+    start_at      TEXT NOT NULL,        -- 'YYYY-MM-DD HH:MM'
+    end_at        TEXT,
+    location      TEXT,
+    notes         TEXT,
+    color         TEXT NOT NULL DEFAULT 'blue'
+);
 CREATE INDEX IF NOT EXISTS idx_msg_folder ON messages(folder);
 CREATE INDEX IF NOT EXISTS idx_msg_thread ON messages(thread_id);
+CREATE INDEX IF NOT EXISTS idx_mlabel_msg ON message_labels(message_id);
+CREATE INDEX IF NOT EXISTS idx_events_start ON events(start_at);
 """
+
+LABEL_COLORS = ["gray", "blue", "green", "amber", "red", "purple", "teal", "pink"]
 
 
 def init_schema():
@@ -113,15 +137,167 @@ def folder_counts() -> dict:
     return out
 
 
+# --- search operators -------------------------------------------------------
+
+_OP_RE = re.compile(r'(\w+):("[^"]*"|\S+)')
+SEARCH_OPERATORS = ["from:", "to:", "subject:", "is:unread", "is:read",
+                    "is:starred", "has:attachment", "label:", "in:"]
+
+
+def parse_search(q: str):
+    """Parse a Gmail-style query into SQL. Returns (clauses, params,
+    scoped_folder, label_filter)."""
+    clauses, params = [], []
+    scoped_folder = None
+    label_filter = None
+    free = q or ""
+    for m in _OP_RE.finditer(q or ""):
+        key, val = m.group(1).lower(), m.group(2).strip('"')
+        free = free.replace(m.group(0), " ")
+        if key == "from":
+            clauses.append("(from_name LIKE ? OR from_email LIKE ?)"); params += [f"%{val}%"] * 2
+        elif key == "to":
+            clauses.append("(to_name LIKE ? OR to_email LIKE ?)"); params += [f"%{val}%"] * 2
+        elif key == "subject":
+            clauses.append("subject LIKE ?"); params.append(f"%{val}%")
+        elif key == "is":
+            v = val.lower()
+            if v == "unread":
+                clauses.append("is_read=0")
+            elif v == "read":
+                clauses.append("is_read=1")
+            elif v == "starred":
+                clauses.append("is_starred=1")
+        elif key == "has":
+            if val.lower().startswith("attach"):
+                clauses.append("has_attach=1")
+        elif key == "in":
+            scoped_folder = val.capitalize()
+        elif key == "label":
+            label_filter = val
+    free = " ".join(free.split()).strip()
+    if free:
+        clauses.append("(subject LIKE ? OR from_name LIKE ? OR from_email LIKE ? OR body LIKE ?)")
+        params += [f"%{free}%"] * 4
+    return clauses, params, scoped_folder, label_filter
+
+
 def messages_in(folder: str, q: str = "") -> list[dict]:
-    if folder == "Starred":
-        where, params = "is_starred=1 AND folder!='Trash'", []
+    clauses, params, scoped_folder, label_filter = parse_search(q) if q else ([], [], None, None)
+    eff = scoped_folder or folder
+    where, wp = [], []
+    if eff == "Starred":
+        where.append("is_starred=1 AND folder!='Trash'")
     else:
-        where, params = "folder=?", [folder]
-    if q:
-        where += " AND (subject LIKE ? OR from_name LIKE ? OR from_email LIKE ? OR body LIKE ?)"
-        params += [f"%{q}%"] * 4
-    return rows(f"SELECT * FROM messages WHERE {where} ORDER BY sent_at DESC LIMIT 200", tuple(params))
+        where.append("folder=?"); wp.append(eff)
+    if label_filter:
+        where.append("id IN (SELECT ml.message_id FROM message_labels ml "
+                     "JOIN labels l ON l.id=ml.label_id WHERE l.name LIKE ?)")
+        wp.append(f"%{label_filter}%")
+    where += clauses
+    return rows(f"SELECT * FROM messages WHERE {' AND '.join(where)} ORDER BY sent_at DESC LIMIT 200",
+                tuple(wp + params))
+
+
+# --- labels -----------------------------------------------------------------
+
+def labels() -> list[dict]:
+    return rows("""SELECT l.*,
+                     (SELECT COUNT(*) FROM message_labels ml JOIN messages m ON m.id=ml.message_id
+                      WHERE ml.label_id=l.id AND m.folder!='Trash') n
+                   FROM labels l ORDER BY l.name""")
+
+
+def label(lid: int):
+    return one("SELECT * FROM labels WHERE id=?", (lid,))
+
+
+def create_label(name: str, color: str = "gray") -> int | None:
+    name = (name or "").strip()
+    if not name:
+        return None
+    if color not in LABEL_COLORS:
+        color = "gray"
+    with cursor() as conn:
+        existing = conn.execute("SELECT id FROM labels WHERE name=?", (name,)).fetchone()
+        if existing:
+            return existing[0]
+        conn.execute("INSERT INTO labels(name,color) VALUES (?,?)", (name, color))
+        return conn.execute("SELECT last_insert_rowid()").fetchone()[0]
+
+
+def delete_label(lid: int):
+    with cursor() as conn:
+        conn.execute("DELETE FROM message_labels WHERE label_id=?", (lid,))
+        conn.execute("DELETE FROM labels WHERE id=?", (lid,))
+
+
+def labels_for(mid: int) -> list[dict]:
+    return rows("""SELECT l.* FROM labels l JOIN message_labels ml ON ml.label_id=l.id
+                   WHERE ml.message_id=? ORDER BY l.name""", (mid,))
+
+
+def labels_map(mids: list[int]) -> dict:
+    """Batch: {message_id: [labels]} for a list view."""
+    if not mids:
+        return {}
+    qmarks = ",".join("?" * len(mids))
+    rs = rows(f"""SELECT ml.message_id mid, l.id, l.name, l.color
+                  FROM message_labels ml JOIN labels l ON l.id=ml.label_id
+                  WHERE ml.message_id IN ({qmarks}) ORDER BY l.name""", tuple(mids))
+    out: dict = {}
+    for r in rs:
+        out.setdefault(r["mid"], []).append(r)
+    return out
+
+
+def add_label(mid: int, label_id: int):
+    with cursor() as conn:
+        conn.execute("INSERT OR IGNORE INTO message_labels(message_id,label_id) VALUES (?,?)", (mid, label_id))
+
+
+def remove_label(mid: int, label_id: int):
+    with cursor() as conn:
+        conn.execute("DELETE FROM message_labels WHERE message_id=? AND label_id=?", (mid, label_id))
+
+
+def messages_by_label(label_id: int) -> list[dict]:
+    return rows("""SELECT m.* FROM messages m JOIN message_labels ml ON ml.message_id=m.id
+                   WHERE ml.label_id=? AND m.folder!='Trash' ORDER BY m.sent_at DESC LIMIT 200""",
+                (label_id,))
+
+
+# --- calendar / events ------------------------------------------------------
+
+def events_between(start_date: str, end_date: str) -> list[dict]:
+    return rows("SELECT * FROM events WHERE start_at >= ? AND start_at < ? ORDER BY start_at",
+                (start_date, end_date))
+
+
+def event(eid: int):
+    return one("SELECT * FROM events WHERE id=?", (eid,))
+
+
+def upcoming_events(from_dt: str, limit: int = 8) -> list[dict]:
+    return rows("SELECT * FROM events WHERE start_at >= ? ORDER BY start_at LIMIT ?", (from_dt, limit))
+
+
+def create_event(title: str, start_at: str, end_at: str = "", location: str = "",
+                 notes: str = "", color: str = "blue") -> int | None:
+    title, start_at = (title or "").strip(), (start_at or "").strip()
+    if not title or not start_at:
+        return None
+    if color not in LABEL_COLORS:
+        color = "blue"
+    with cursor() as conn:
+        conn.execute("INSERT INTO events(title,start_at,end_at,location,notes,color) VALUES (?,?,?,?,?,?)",
+                     (title, start_at, end_at or None, location or None, notes or None, color))
+        return conn.execute("SELECT last_insert_rowid()").fetchone()[0]
+
+
+def delete_event(eid: int):
+    with cursor() as conn:
+        conn.execute("DELETE FROM events WHERE id=?", (eid,))
 
 
 def message(mid: int) -> dict | None:

@@ -111,6 +111,44 @@ a{color:var(--accent);text-decoration:none;} a:hover{text-decoration:underline;}
 .spinner{display:inline-block;width:13px;height:13px;border:2px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin .8s linear infinite;vertical-align:middle;}
 @keyframes spin{to{transform:rotate(360deg);}}
 @keyframes pulse{0%,100%{opacity:.35;transform:scale(.85);}50%{opacity:1;transform:scale(1.1);}}
+/* labels */
+.lbl{display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:600;padding:1px 8px;border-radius:999px;border:1px solid transparent;white-space:nowrap;}
+.lbl-x{cursor:pointer;opacity:.7;font-weight:700;} .lbl-x:hover{opacity:1;}
+.lbl-gray{background:#e2e8f0;color:#475569;} .lbl-blue{background:#dbeafe;color:#1d4ed8;}
+.lbl-green{background:#dcfce7;color:#166534;} .lbl-amber{background:#fef3c7;color:#92400e;}
+.lbl-red{background:#fee2e2;color:#991b1b;} .lbl-purple{background:#ede9fe;color:#6d28d9;}
+.lbl-teal{background:#ccfbf1;color:#0f766e;} .lbl-pink{background:#fce7f3;color:#9d174d;}
+.row-labels{display:inline-flex;gap:4px;margin:0 4px;}
+.msg-labels{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin:10px 0;padding:8px 0;border-top:1px solid var(--border);}
+.lbl-add{padding:4px 8px;border:1px solid var(--border);border-radius:7px;font-size:12px;background:var(--surface);}
+.lbl-manage{font-size:11.5px;color:var(--text-mute);margin-left:auto;}
+.label-row{display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid var(--border);}
+.label-row:last-child{border-bottom:0;}
+.lbl-dot-gray{color:#94a3b8;} .lbl-dot-blue{color:#3b82f6;} .lbl-dot-green{color:#22c55e;}
+.lbl-dot-amber{color:#f59e0b;} .lbl-dot-red{color:#ef4444;} .lbl-dot-purple{color:#8b5cf6;}
+.lbl-dot-teal{color:#14b8a6;} .lbl-dot-pink{color:#ec4899;}
+.search-hint{font-size:11px;color:var(--text-mute);margin-top:5px;padding-left:2px;}
+.mrow .attach{color:var(--text-mute);font-size:12px;margin-right:4px;}
+.btn.sm{padding:3px 8px;font-size:12px;}
+/* calendar */
+.cal-layout{display:grid;grid-template-columns:1fr 300px;gap:16px;align-items:start;}
+.cal-grid{background:var(--surface);border:1px solid var(--border);border-radius:10px;overflow:hidden;}
+.cal-row{display:grid;grid-template-columns:repeat(7,1fr);}
+.cal-head{background:var(--surface-2);} .cal-dow{padding:7px 8px;font-size:11px;font-weight:700;color:var(--text-mute);text-transform:uppercase;letter-spacing:.5px;text-align:center;}
+.cal-cell{display:block;min-height:92px;border-top:1px solid var(--border);border-left:1px solid var(--border);padding:4px 5px;color:var(--text);}
+.cal-cell:hover{background:var(--surface-2);text-decoration:none;}
+.cal-row .cal-cell:first-child{border-left:0;}
+.cal-cell.other{background:var(--bg);color:var(--text-mute);}
+.cal-cell.today{background:var(--accent-light);}
+.cal-num{font-size:12px;font-weight:600;margin-bottom:3px;}
+.cal-cell.today .cal-num{color:var(--accent-hover);}
+.cal-ev{display:block;font-size:10.5px;padding:1px 5px;border-radius:5px;margin-bottom:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text);}
+.cal-ev:hover{text-decoration:none;}
+.cal-more{font-size:10px;color:var(--text-mute);}
+.ev-item{display:flex;align-items:flex-start;gap:8px;padding:8px 0;border-bottom:1px solid var(--border);}
+.ev-item:last-child{border-bottom:0;}
+.dot-gray{color:#94a3b8;} .dot-blue{color:#3b82f6;} .dot-green{color:#22c55e;} .dot-amber{color:#f59e0b;}
+.dot-red{color:#ef4444;} .dot-purple{color:#8b5cf6;} .dot-teal{color:#14b8a6;} .dot-pink{color:#ec4899;}
 """
 
 FOLDER_ICONS = {"Inbox": "📥", "Starred": "⭐", "Sent": "📤", "Drafts": "📝",
@@ -137,7 +175,20 @@ def left_pane(active, counts):
                  else (Span(str(c["total"]), cls="cnt") if c["total"] else None))
         items.append(A(Span(FOLDER_ICONS[f], cls="nav-icon"), Span(f), badge,
                        href=f"/folder/{f}", cls=f"nav-item {'active' if active == f else ''}"))
+    # labels section
+    label_items = []
+    for l in db.labels():
+        label_items.append(A(Span("●", cls=f"nav-icon lbl-dot-{l['color']}"), Span(l["name"]),
+                             (Span(str(l["n"]), cls="cnt") if l["n"] else None),
+                             href=f"/label/{l['id']}", cls=f"nav-item {'active' if active == f'label-{l['id']}' else ''}"))
+    label_items.append(A(Span("🏷", cls="nav-icon"), Span("Manage labels"), href="/labels",
+                         cls=f"nav-item {'active' if active == 'labels' else ''}",
+                         style="color:var(--text-mute);font-size:12.5px;"))
+    labels_sec = Div(H4("LABELS"), *label_items, cls="nav-section")
+
     extra = Div(H4("MORE"),
+                A(Span("📅", cls="nav-icon"), Span("Calendar"), href="/calendar",
+                  cls=f"nav-item {'active' if active == 'calendar' else ''}"),
                 A(Span("👥", cls="nav-icon"), Span("Contacts"), href="/contacts",
                   cls=f"nav-item {'active' if active == 'contacts' else ''}"),
                 A(Span("🤖", cls="nav-icon"), Span("AI Assistant"), href="/ai",
@@ -146,7 +197,7 @@ def left_pane(active, counts):
                   cls=f"nav-item {'active' if active == 'guide' else ''}"),
                 cls="nav-section")
     return Div(A("✏️  Compose", href="/compose", cls="compose-btn"),
-               Div(H4("FOLDERS"), *items, cls="nav-section"), extra, cls="left-pane")
+               Div(H4("FOLDERS"), *items, cls="nav-section"), labels_sec, extra, cls="left-pane")
 
 
 def _sample_cards():

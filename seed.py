@@ -84,7 +84,7 @@ def _snippet(body):
 def build():
     db.init_schema()
     with db.cursor() as conn:
-        for t in ("messages", "contacts", "chat_messages"):
+        for t in ("message_labels", "labels", "events", "messages", "contacts", "chat_messages"):
             conn.execute(f"DELETE FROM {t}")
         conn.executemany("INSERT INTO contacts(name,email,company) VALUES (?,?,?)", PEOPLE)
 
@@ -169,8 +169,43 @@ def build():
                 sent_at,is_read,is_starred,has_attach)
                VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)""", msgs)
 
+    # labels
+    labels = [("Work", "blue"), ("Personal", "green"), ("Finance", "amber"),
+              ("Travel", "teal"), ("Important", "red"), ("Newsletter", "purple")]
+    with db.cursor() as conn:
+        conn.executemany("INSERT INTO labels(name,color) VALUES (?,?)", labels)
+        label_ids = [r[0] for r in conn.execute("SELECT id FROM labels").fetchall()]
+        inbox_ids = [r[0] for r in conn.execute(
+            "SELECT id FROM messages WHERE folder='Inbox'").fetchall()]
+        # tag ~60% of inbox messages with 1–2 random labels
+        ml = []
+        for mid in inbox_ids:
+            if RNG.random() < 0.6:
+                for lid in RNG.sample(label_ids, RNG.randint(1, 2)):
+                    ml.append((mid, lid))
+        conn.executemany("INSERT OR IGNORE INTO message_labels(message_id,label_id) VALUES (?,?)", ml)
+
+    # calendar events around the 'today' (2026-06-11)
+    ev_titles = [
+        ("Team standup", "09:00", "Zoom", "blue"), ("1:1 with Morgan", "11:30", "Office 3B", "purple"),
+        ("Product review", "14:00", "Boardroom", "blue"), ("Dentist", "08:30", "High St Clinic", "green"),
+        ("Flight to Berlin", "06:45", "LHR T5", "teal"), ("Quarterly board", "10:00", "HQ", "red"),
+        ("Lunch with Sam", "12:30", "Café Nero", "green"), ("Invoice run", "16:00", "", "amber"),
+        ("Design crit", "15:00", "Studio", "blue"), ("Gym", "18:30", "", "green"),
+        ("Customer demo", "13:00", "Zoom", "blue"), ("Payroll cutoff", "17:00", "", "amber"),
+    ]
+    events = []
+    for (title, hm, loc, color) in ev_titles:
+        day_offset = RNG.randint(-3, 18)  # spread across the visible month
+        d = (NOW + timedelta(days=day_offset)).date()
+        events.append((title, f"{d.isoformat()} {hm}", None, loc or None, None, color))
+    with db.cursor() as conn:
+        conn.executemany(
+            "INSERT INTO events(title,start_at,end_at,location,notes,color) VALUES (?,?,?,?,?,?)", events)
+
     print(f"FastMail seeded → {db.DB_PATH}")
     print(f"  {len(msgs)} messages across {len(db.FOLDERS)} folders · {len(PEOPLE)} contacts")
+    print(f"  {len(labels)} labels · {len(ml)} label tags · {len(events)} calendar events")
 
 
 if __name__ == "__main__":

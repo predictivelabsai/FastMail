@@ -15,20 +15,26 @@ synthetic mailbox — the part a user actually sees.
 | Address book | `Address Book`, `Contact Card` | `contacts` |
 | Compose / send | outbound message | `/compose` → saves to Sent |
 | Star / read state | flags | inline HTMX star, read tracking |
+| **Labels** | custom labels | `labels`/`message_labels` (colour chips, per-message add/remove, label views) |
+| **Search operators** | query syntax | `from: to: subject: label: in: is:unread is:starred has:attachment` + free text |
+| **Calendar** | `Calendar Event` | `events` table, month grid + day panel + create/delete |
 | **AI summarise / draft** | *(not upstream)* | per-thread summary + reply draft |
 
 ## Near-term roadmap 🔜
 
 1. ✅ **Reply send flow** (done) — inline threaded reply; wire
    reply/forward to thread the new message and update folder counts live.
-2. **Labels / multiple accounts** — `Identity`, `Mailbox Settings` (more than
-   one identity, custom labels beyond the 6 system folders).
-3. **Search operators** — `from:`, `subject:`, `is:unread`, date ranges.
-4. **Calendar** — `frappe/mail` bundles a calendar subsystem (`Calendar`,
-   `Calendar Event`, `Event Participant`). Add a calendar + event views as a
-   second module (the 3-pane shell already suits it).
+2. ✅ **Labels** (done) — coloured custom labels (`labels`/`message_labels`):
+   sidebar list with counts, per-message add/remove, dedicated label views, and
+   a labels manager. Multiple identities/accounts are still out of scope.
+3. ✅ **Search operators** (done) — a Gmail-style parser (`db.parse_search`):
+   `from:` `to:` `subject:` `label:` `in:` `is:unread/read/starred`
+   `has:attachment`, combinable with free text. Date-range operators still to come.
+4. ✅ **Calendar** (done) — an `events` table with a month-grid view (today
+   highlighted, prev/next navigation), a day/upcoming side panel, and
+   create/delete. Event participants & invitations are still to come.
 5. **Attachments** — `Mail Message Part` (show/download attachments;
-   `has_attach` is modelled but inert).
+   `has_attach` is modelled and now shown in the list, but inert).
 6. **Rules / filters** — auto-file incoming mail by sender/subject.
 
 ## Later / out-of-scope 🗓️
@@ -46,6 +52,8 @@ client demonstrator:
 ## Design notes
 
 FastMail is deliberately the **client**: it renders a mailbox and adds AI triage
-(summarise/draft) that a traditional webmail lacks. The most valuable next step
-is the **calendar** module — upstream ships it inside `frappe/mail`, and the
-3-pane shell already accommodates a calendar/agenda view.
+(summarise/draft) that a traditional webmail lacks. It now also carries the
+organisational layer on top of the mailbox — **labels** (colour-coded, many-to-
+many), a **search-operator** parser that compiles a Gmail-style query to safe
+parameterised SQL, and a **calendar** module (the `events` table + a month grid),
+all sharing the same 3-pane HTMX shell.
