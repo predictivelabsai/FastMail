@@ -20,8 +20,9 @@ ACCOUNT_EMAIL = "avery@fastmail.example"
 
 
 def connect():
-    conn = sqlite3.connect(DB_PATH)
+    conn = sqlite3.connect(DB_PATH, timeout=10)
     conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA busy_timeout = 5000")
     return conn
 
 
@@ -145,3 +146,26 @@ def toggle_star(mid: int) -> int:
 def move_to(mid: int, folder: str):
     with cursor() as conn:
         conn.execute("UPDATE messages SET folder=? WHERE id=?", (folder, mid))
+
+
+def set_read(mid: int, read: bool):
+    with cursor() as conn:
+        conn.execute("UPDATE messages SET is_read=? WHERE id=?", (1 if read else 0, mid))
+
+
+def send_reply(in_reply_to: int, body: str):
+    """Reply within a thread: a message from ME, foldered Sent, sharing the thread."""
+    orig = message(in_reply_to)
+    if not orig or not body.strip():
+        return None
+    tid = orig["thread_id"]
+    subj = orig["subject"] or ""
+    if not subj.lower().startswith("re:"):
+        subj = "Re: " + subj
+    snippet = body.replace("\n", " ").strip()[:110]
+    with cursor() as conn:
+        conn.execute(
+            """INSERT INTO messages(thread_id,folder,from_name,from_email,to_name,to_email,subject,body,snippet,sent_at,is_read)
+               VALUES (?,'Sent',?,?,?,?,?,?,?,datetime('now'),1)""",
+            (tid, ACCOUNT_NAME, ACCOUNT_EMAIL, orig["from_name"], orig["from_email"], subj, body.strip(), snippet))
+        return conn.execute("SELECT last_insert_rowid()").fetchone()[0]

@@ -19,7 +19,7 @@ synthetic mailbox — the part a user actually sees.
 
 ## Near-term roadmap 🔜
 
-1. **Real reply/forward send flow** — currently compose saves to Sent; wire
+1. ✅ **Reply send flow** (done) — inline threaded reply; wire
    reply/forward to thread the new message and update folder counts live.
 2. **Labels / multiple accounts** — `Identity`, `Mailbox Settings` (more than
    one identity, custom labels beyond the 6 system folders).

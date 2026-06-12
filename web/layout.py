@@ -60,6 +60,9 @@ a{color:var(--accent);text-decoration:none;} a:hover{text-decoration:underline;}
 .read-head{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:6px;}
 .read-head h1{margin:0;font-size:21px;}
 .read-actions{display:flex;gap:8px;flex-wrap:wrap;}
+.reply-box{margin-top:12px;border:1px solid var(--border);border-radius:10px;background:var(--surface);padding:12px;}
+.reply-box textarea{width:100%;min-height:90px;padding:10px 12px;border:1px solid var(--border);border-radius:8px;font-size:14px;font-family:inherit;resize:vertical;}
+.reply-box textarea:focus{border-color:var(--accent);outline:none;box-shadow:0 0 0 3px var(--accent-light);}
 .email{border:1px solid var(--border);border-radius:10px;background:var(--surface);margin-bottom:12px;overflow:hidden;}
 .email-head{padding:12px 16px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;}
 .email-head .from{font-weight:700;} .email-head .addr{color:var(--text-mute);font-size:12px;}

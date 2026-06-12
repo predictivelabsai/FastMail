@@ -63,12 +63,13 @@ def star_cell(mid: int):
 
 # ---------- reading view ----------------------------------------------------
 
-def message_view(mid: int):
+def message_main(mid: int):
+    """Reading body (thread + reply + AI panel), returned standalone for HTMX swaps."""
     m = db.message(mid)
     if not m:
         return Div(P("Message not found."), cls="empty")
-    db.mark_read(mid)
     msgs = db.thread(m["thread_id"]) if m["thread_id"] else [m]
+    last = msgs[-1] if msgs else m
     emails = []
     for e in msgs:
         emails.append(Div(
@@ -77,19 +78,35 @@ def message_view(mid: int):
                     Span(f"  <{e['from_email']}>", cls="addr")),
                 Span(e["sent_at"][:16], cls="when"), cls="email-head"),
             Div(e["body"] or "", cls="email-body"), cls="email"))
-    back = A("← Back", href=f"/folder/{m['folder']}", cls="btn")
+    reply_box = Form(
+        Textarea("", name="body", placeholder=f"Reply to {last['from_name']}…", required=True),
+        Div(Button("↩ Send reply", cls="btn primary", type="submit"),
+            Button("✍️ AI draft", cls="btn", type="button",
+                   **{"hx-post": f"/ai/draft/{last['id']}", "hx-target": "#ai-panel", "hx-swap": "innerHTML"}),
+            style="margin-top:8px;display:flex;gap:8px;"),
+        **{"hx-post": f"/reply/{last['id']}", "hx-target": "#msg-main", "hx-swap": "innerHTML"},
+        cls="reply-box")
+    return Div(Div(id="ai-panel", style="margin-bottom:12px;"), *emails, reply_box)
+
+
+def message_view(mid: int):
+    m = db.message(mid)
+    if not m:
+        return Div(P("Message not found."), cls="empty")
+    db.mark_read(mid)
+    folder = m["folder"]
     actions = Div(
-        Button("✨ Summarise thread", cls="btn primary",
+        A("← Back", href=f"/folder/{folder}", cls="btn"),
+        Button("✨ Summarise", cls="btn",
                **{"hx-post": f"/ai/summarise/{m['thread_id'] or 0}/{mid}", "hx-target": "#ai-panel", "hx-swap": "innerHTML"}),
-        Button("✍️ Draft reply", cls="btn",
-               **{"hx-post": f"/ai/draft/{mid}", "hx-target": "#ai-panel", "hx-swap": "innerHTML"}),
-        A("↩ Reply", href=f"/compose?reply={mid}", cls="btn"),
+        Button("📥 Archive", cls="btn", **{"hx-post": f"/msg/{mid}/move", "hx-vals": '{"folder":"Archive"}'}),
+        Button("🗑 Trash", cls="btn", **{"hx-post": f"/msg/{mid}/move", "hx-vals": '{"folder":"Trash"}'}),
+        Button("Mark unread", cls="btn", **{"hx-post": f"/msg/{mid}/unread"}),
         cls="read-actions")
     return Div(
-        Div(Div(H1(m["subject"] or "(no subject)"), back, cls="read-head"),
+        Div(Div(H1(m["subject"] or "(no subject)"), cls="read-head"),
             actions,
-            Div(id="ai-panel", style="margin-top:12px;"),
-            *emails,
+            Div(message_main(mid), id="msg-main", style="margin-top:12px;"),
             cls="reading"))
 
 

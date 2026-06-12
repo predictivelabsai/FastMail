@@ -118,6 +118,32 @@ def post(session, mid: int):
     return views.star_cell(mid)
 
 
+@rt("/reply/{mid}")
+def post(session, mid: int, body: str = ""):
+    if not _user(session):
+        return Response("Unauthorized", status_code=401)
+    db.send_reply(mid, body)
+    return views.message_main(mid)
+
+
+@rt("/msg/{mid}/move")
+def post(session, mid: int, folder: str = "Archive"):
+    if not _user(session):
+        return Response("Unauthorized", status_code=401)
+    src = db.message(mid)
+    db.move_to(mid, folder if folder in db.FOLDERS else "Archive")
+    return Response(headers={"HX-Redirect": f"/folder/{src['folder'] if src else 'Inbox'}"})
+
+
+@rt("/msg/{mid}/unread")
+def post(session, mid: int):
+    if not _user(session):
+        return Response("Unauthorized", status_code=401)
+    src = db.message(mid)
+    db.set_read(mid, False)
+    return Response(headers={"HX-Redirect": f"/folder/{src['folder'] if src else 'Inbox'}"})
+
+
 @rt("/compose")
 def get(session, reply: int | None = None):
     return _guard(session, "compose", lambda: views.compose_view(reply))
