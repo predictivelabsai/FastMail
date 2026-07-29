@@ -195,6 +195,8 @@ def left_pane(active, counts):
                   cls=f"nav-item {'active' if active == 'ai' else ''}"),
                 A(Span("📖", cls="nav-icon"), Span("User Guide"), href="/guide",
                   cls=f"nav-item {'active' if active == 'guide' else ''}"),
+                A(Span("⌘", cls="nav-icon"), Span("Developers"), href="/developers",
+                  cls=f"nav-item {'active' if active == 'developers' else ''}"),
                 cls="nav-section")
     return Div(A("✏️  Compose", href="/compose", cls="compose-btn"),
                Div(H4("FOLDERS"), *items, cls="nav-section"), labels_sec, extra, cls="left-pane")
