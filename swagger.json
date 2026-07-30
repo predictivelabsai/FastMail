@@ -632,6 +632,11 @@
             "description": "Validation Error"
           }
         },
+        "security": [
+          {
+            "FastSME API token": []
+          }
+        ],
         "summary": "List contacts",
         "tags": [
           "Contacts"
@@ -684,6 +689,11 @@
             "description": "Validation Error"
           }
         },
+        "security": [
+          {
+            "FastSME API token": []
+          }
+        ],
         "summary": "Get one contacts record",
         "tags": [
           "Contacts"
@@ -759,6 +769,11 @@
             "description": "Validation Error"
           }
         },
+        "security": [
+          {
+            "FastSME API token": []
+          }
+        ],
         "summary": "List calendar events",
         "tags": [
           "Calendar events"
@@ -811,6 +826,11 @@
             "description": "Validation Error"
           }
         },
+        "security": [
+          {
+            "FastSME API token": []
+          }
+        ],
         "summary": "Get one calendar events record",
         "tags": [
           "Calendar events"
@@ -907,6 +927,11 @@
             "description": "Validation Error"
           }
         },
+        "security": [
+          {
+            "FastSME API token": []
+          }
+        ],
         "summary": "List labels",
         "tags": [
           "Labels"
@@ -1024,6 +1049,11 @@
             "description": "Validation Error"
           }
         },
+        "security": [
+          {
+            "FastSME API token": []
+          }
+        ],
         "summary": "Get one labels record",
         "tags": [
           "Labels"
@@ -1099,6 +1129,11 @@
             "description": "Validation Error"
           }
         },
+        "security": [
+          {
+            "FastSME API token": []
+          }
+        ],
         "summary": "List messages",
         "tags": [
           "Messages"
@@ -1151,6 +1186,11 @@
             "description": "Validation Error"
           }
         },
+        "security": [
+          {
+            "FastSME API token": []
+          }
+        ],
         "summary": "Get one messages record",
         "tags": [
           "Messages"
